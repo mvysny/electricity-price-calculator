@@ -39,20 +39,20 @@ fun main() {
 
     // print stats
     fun statsSince(since: LocalDateTime) {
-        val fc = consumption.filterKeys { it >= since }
-        println("============================================================")
-        println("Total consumption kWh: ${fc.values.sum()}")
-        println("Avg hourly consumption kWh: ${fc.values.average()}")
+        val filteredConsumption = consumption.filterKeys { it >= since }
+        println("== Since $since ==========================================================")
+        println("Total consumption kWh: ${filteredConsumption.values.sum()}")
+        println("Avg hourly consumption kWh: ${filteredConsumption.values.average()}")
 
-        println("Electricity price at flat 5.18c/kWh: ${fc.values.sum() * 0.0518} EUR")
-        println("Electricity price at flat 20c/kWh: ${fc.values.sum() * 0.2} EUR")
+        println("Electricity price at flat 5.18c/kWh: ${filteredConsumption.values.sum() * 0.0518} EUR")
+        println("Electricity price at flat 20c/kWh: ${filteredConsumption.values.sum() * 0.2} EUR")
         val totalPriceAtSpot =
-            fc.entries.sumOf { it.value * getSpotPriceAt(it.key) * 0.01 }
+            filteredConsumption.entries.sumOf { it.value * getSpotPriceAt(it.key) * 0.01 }
         println("Electricity price at spot prices: $totalPriceAtSpot EUR")
-        println("Spot price = flat price at ${totalPriceAtSpot / fc.values.sum() * 100}c/kWh")
+        println("Spot price = flat price at ${totalPriceAtSpot / filteredConsumption.values.sum() * 100}c/kWh")
     }
 
-    statsSince(LocalDateTime.MIN)
+    statsSince(LocalDateTime.of(2022, 1, 1, 0, 0, 0))
     val i_started_to_charge_my_car_at_1am = LocalDateTime.of(2022, 8, 29, 0, 0, 0)
     statsSince(i_started_to_charge_my_car_at_1am)
 }
