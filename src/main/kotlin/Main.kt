@@ -35,6 +35,18 @@ fun main() {
         }
     }
 
+    // adjust with a dummy generation data
+    val solarPanelGenerationPerHour = listOf<Float>(0f, 0f, 0f, 0f, 0f, 0f,
+        0.1f, 0.3f, 0.6f, 0.75f, 0.8f, 0.8f,
+        0.85f, 0.95f, 0.8f, 0.75f, 0.5f, 0.3f,
+        0.1f, 0f, 0f, 0f, 0f, 0f
+    )
+    for (key in consumption.keys.toList()) {
+        val maxProductionKwhPerHour = 2f
+        val solarPanelGeneration = solarPanelGenerationPerHour[key.hour] * maxProductionKwhPerHour
+        consumption[key] = consumption[key]!! - solarPanelGeneration
+    }
+
     // print stats
     fun statsSince(since: LocalDateTime) {
         fun getSpotPriceAt(dateTime: LocalDateTime): Float =
