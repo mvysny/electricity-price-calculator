@@ -17,8 +17,6 @@ fun main() {
             spotPrices[dateTime] = line[1].toFloat()
         }
     }
-    fun getSpotPriceAt(dateTime: LocalDateTime): Float =
-        spotPrices[dateTime] ?: spotPrices.getOrElse(dateTime.toLocalDate().atStartOfDay()) { throw RuntimeException("No spot price for $dateTime") }
 
     println("Avg spot price: ${spotPrices.values.average()}")
 
@@ -39,6 +37,9 @@ fun main() {
 
     // print stats
     fun statsSince(since: LocalDateTime) {
+        fun getSpotPriceAt(dateTime: LocalDateTime): Float =
+            spotPrices[dateTime] ?: spotPrices.getOrElse(dateTime.toLocalDate().atStartOfDay()) { throw RuntimeException("No spot price for $dateTime") }
+
         val filteredConsumption = consumption.filterKeys { it >= since }
         println("== Since $since ==========================================================")
         println("Total consumption kWh: ${filteredConsumption.values.sum()}")
