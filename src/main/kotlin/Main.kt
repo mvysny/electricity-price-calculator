@@ -5,7 +5,10 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 fun main() {
-    // spot prices. Maps date+time to a price per kWh in cents
+    // spot prices. Maps date+time to a price per kWh in cents.
+    // Downloaded from https://sahko.tk/ . The CSV has two columns.
+    // First column is the date+time in hourly granularity,
+    // second column is the price of electricity in euro-cents.
     val spotPrices = mutableMapOf<LocalDateTime, Float>()
     File("/home/mavi/Downloads/spot_prices.csv").bufferedReader().use {
         val csvReader = CSVReader(it)
@@ -20,22 +23,24 @@ fun main() {
 
     println("Avg spot price: ${spotPrices.values.average()}")
 
-    // my consumption for 2022. Maps date+time to used kWh
+    // my consumption for 2022. Maps date+time to used kWh.
     val consumption = mutableMapOf<LocalDateTime, Float>()
+    // Helen produces a two-column CSV. First column is the date+time in hourly granularity,
+    // second column is the consumption in kWh
     File("/home/mavi/Downloads/helen.csv").bufferedReader().use {
         val csvReader = CSVReader(it)
         csvReader.readNext() // skip header
         val datetimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss")
         val lines = generateSequence { csvReader.readNext() }
         lines.forEach { line ->
-            if (line[1].isNotBlank()) {
+            if (line[1].isNotBlank()) { // for future dates the consumption will be missing. just skip them.
                 val dateTime = LocalDateTime.parse(line[0], datetimeFormatter)
                 consumption[dateTime] = line[1].toFloat()
             }
         }
     }
 
-    // adjust with a dummy generation data
+    // adjust with a dummy solar panel generation data.
     val solarPanelGenerationPerHour = listOf<Float>(0f, 0f, 0f, 0f, 0f, 0f,
         0.1f, 0.3f, 0.6f, 0.75f, 0.8f, 0.8f,
         0.85f, 0.95f, 0.8f, 0.75f, 0.5f, 0.3f,
