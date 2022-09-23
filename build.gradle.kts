@@ -14,6 +14,8 @@ repositories {
 dependencies {
     testImplementation(kotlin("test"))
     implementation("com.opencsv:opencsv:5.7.0")
+    implementation("com.google.code.gson:gson:2.9.1")
+    implementation("com.fatboyindustrial.gson-javatime-serialisers:gson-javatime-serialisers:1.1.1")
 }
 
 tasks.test {

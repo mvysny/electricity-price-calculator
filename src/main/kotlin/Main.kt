@@ -3,13 +3,14 @@ import java.io.File
 import java.lang.RuntimeException
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.function.Function
 
 fun main() {
     // spot prices. Maps date+time to a price per kWh in cents.
     // Downloaded from https://sahko.tk/ . The CSV has two columns.
     // First column is the date+time in hourly granularity,
     // second column is the price of electricity in euro-cents.
-    val spotPrices = mutableMapOf<LocalDateTime, Float>()
+    val spotPrices = mutableMapOf<LocalDateTime, Double>()
     File("/home/mavi/Downloads/spot_prices.csv").bufferedReader().use {
         val csvReader = CSVReader(it)
         csvReader.readNext() // skip header
@@ -17,14 +18,14 @@ fun main() {
         val lines = generateSequence { csvReader.readNext() }
         lines.forEach { line ->
             val dateTime = LocalDateTime.parse(line[0], datetimeFormatter)
-            spotPrices[dateTime] = line[1].toFloat()
+            spotPrices[dateTime] = line[1].toDouble()
         }
     }
 
     println("Avg spot price: ${spotPrices.values.average()}")
 
     // my consumption for 2022. Maps date+time to used kWh.
-    val consumption = mutableMapOf<LocalDateTime, Float>()
+    val consumption = mutableMapOf<LocalDateTime, Double>()
     // Helen produces a two-column CSV. First column is the date+time in hourly granularity,
     // second column is the consumption in kWh
     File("/home/mavi/Downloads/helen.csv").bufferedReader().use {
@@ -35,33 +36,34 @@ fun main() {
         lines.forEach { line ->
             if (line[1].isNotBlank()) { // for future dates the consumption will be missing. just skip them.
                 val dateTime = LocalDateTime.parse(line[0], datetimeFormatter)
-                consumption[dateTime] = line[1].toFloat()
+                consumption[dateTime] = line[1].toDouble()
             }
         }
     }
 
-    // adjust with a dummy solar panel generation data.
-    val solarPanelGenerationPerHour = listOf<Float>(0f, 0f, 0f, 0f, 0f, 0f,
-        0.1f, 0.3f, 0.6f, 0.75f, 0.8f, 0.8f,
-        0.85f, 0.95f, 0.8f, 0.75f, 0.5f, 0.3f,
-        0.1f, 0f, 0f, 0f, 0f, 0f
-    )
+    val solarPanelGenerationPerHour: SolarProductionCalculator = FroniusData() // or SolarProductionCalculator or NoSolarProduction
+    var totalSolarPanelGeneration: Double = 0.0
+    // adjust with a generation data.
     for (key in consumption.keys.toList()) {
-        val maxProductionKwhPerHour = 2f
-        val solarPanelGeneration = solarPanelGenerationPerHour[key.hour] * maxProductionKwhPerHour
+        val solarPanelGeneration = solarPanelGenerationPerHour.apply(key)
+        totalSolarPanelGeneration += solarPanelGeneration
         consumption[key] = consumption[key]!! - solarPanelGeneration
     }
 
+    println("!!!! Total Solar Production kWh: $totalSolarPanelGeneration")
+
     // print stats
     fun statsSince(since: LocalDateTime) {
-        fun getSpotPriceAt(dateTime: LocalDateTime): Float =
+        fun getSpotPriceAt(dateTime: LocalDateTime): Double =
             spotPrices[dateTime] ?: spotPrices.getOrElse(dateTime.toLocalDate().atStartOfDay()) { throw RuntimeException("No spot price for $dateTime") }
 
         val filteredConsumption = consumption.filterKeys { it >= since }
         println("== Since $since ==========================================================")
         println("Total consumption kWh: ${filteredConsumption.values.sum()}")
+        println("Min consumption kWh: ${filteredConsumption.entries.minByOrNull { it.value }}")
+        println("Max consumption kWh: ${filteredConsumption.entries.maxByOrNull { it.value }}")
         println("Avg hourly consumption kWh: ${filteredConsumption.values.average()}")
-
+        println()
         println("Electricity price at flat 5.18c/kWh: ${filteredConsumption.values.sum() * 0.0518} EUR")
         println("Electricity price at flat 20c/kWh: ${filteredConsumption.values.sum() * 0.2} EUR")
         val totalPriceAtSpot =
@@ -73,4 +75,42 @@ fun main() {
     statsSince(LocalDateTime.of(2022, 1, 1, 0, 0, 0))
     val i_started_to_charge_my_car_at_1am = LocalDateTime.of(2022, 8, 29, 0, 0, 0)
     statsSince(i_started_to_charge_my_car_at_1am)
+}
+
+/**
+ * Given a date+time in hourly granularity (year=2022), returns the number of KWh produced in that hour.
+ */
+typealias SolarProductionCalculator = Function<LocalDateTime, Double>
+
+object NoSolarProduction : SolarProductionCalculator {
+    override fun apply(t: LocalDateTime): Double = 0.0
+}
+
+object DummySolarProduction : SolarProductionCalculator {
+    private val solarPanelGenerationPerHour = listOf<Float>(0f, 0f, 0f, 0f, 0f, 0f,
+        0.1f, 0.3f, 0.6f, 0.75f, 0.8f, 0.8f,
+        0.85f, 0.95f, 0.8f, 0.75f, 0.5f, 0.3f,
+        0.1f, 0f, 0f, 0f, 0f, 0f
+    )
+    private val maxProductionKwhPerHour = 2.0
+    override fun apply(t: LocalDateTime): Double = solarPanelGenerationPerHour[t.hour] * maxProductionKwhPerHour
+}
+
+class FroniusData : SolarProductionCalculator {
+    // get real production data: 2022-06-01..2022-06-30
+    private val froniusData1: FroniusResponse = FroniusResponse.fromJson(File("/home/mavi/Downloads/GetArchiveData 1-15.6.2022.js"))
+    private val froniusData2: FroniusResponse = FroniusResponse.fromJson(File("/home/mavi/Downloads/GetArchiveData 16-30.6.2022.js"))
+
+    // maps hour to Wh
+    private val hourlyMap: Map<LocalDateTime, Double> = froniusData1.Body.Data["inverter/1"]!!.toHourlyMap() +
+            froniusData2.Body.Data["inverter/1"]!!.toHourlyMap()
+
+    override fun apply(t: LocalDateTime): Double {
+        var adjustedDay = t
+        if (adjustedDay.dayOfMonth == 31) {
+            adjustedDay = adjustedDay.withDayOfMonth(30)
+        }
+        adjustedDay = adjustedDay.withMonth(6)
+        return (hourlyMap[adjustedDay] ?: 0.0) / 1000.0
+    }
 }
