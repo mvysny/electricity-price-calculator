@@ -56,7 +56,7 @@ fun main() {
             spotPrices[dateTime] ?: spotPrices.getOrElse(dateTime.toLocalDate().atStartOfDay()) { throw RuntimeException("No spot price for $dateTime") }
 
         val filteredConsumption = consumption.filterKeys { it >= since }
-        println("== Since $since ==========================================================")
+        println("== Range ${filteredConsumption.keys.min()} .. ${filteredConsumption.keys.max()} ==========================================================")
         println("Total consumption kWh: ${filteredConsumption.values.sum()}")
         println("Min consumption kWh: ${filteredConsumption.entries.minByOrNull { it.value }}")
         println("Max consumption kWh: ${filteredConsumption.entries.maxByOrNull { it.value }}")
