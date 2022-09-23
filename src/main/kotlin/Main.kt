@@ -2,6 +2,7 @@ import com.opencsv.CSVReader
 import java.io.File
 import java.lang.RuntimeException
 import java.time.LocalDateTime
+import java.time.Month
 import java.time.format.DateTimeFormatter
 import java.util.function.Function
 
@@ -41,16 +42,13 @@ fun main() {
         }
     }
 
-    val solarPanelGenerationPerHour: SolarProductionCalculator = FroniusData() // or SolarProductionCalculator or NoSolarProduction
-    var totalSolarPanelGeneration: Double = 0.0
+    val solarPanelGenerationPerHour: SolarProductionCalculator = FroniusData() // or DummySolarProduction or NoSolarProduction
+    solarPanelGenerationPerHour.dumpMonthlyStats()
     // adjust with a generation data.
     for (key in consumption.keys.toList()) {
         val solarPanelGeneration = solarPanelGenerationPerHour.apply(key)
-        totalSolarPanelGeneration += solarPanelGeneration
         consumption[key] = consumption[key]!! - solarPanelGeneration
     }
-
-    println("!!!! Total Solar Production kWh: $totalSolarPanelGeneration")
 
     // print stats
     fun statsSince(since: LocalDateTime) {
@@ -106,6 +104,8 @@ class FroniusData : SolarProductionCalculator {
             froniusData2.Body.Data["inverter/1"]!!.toHourlyMap()
 
     override fun apply(t: LocalDateTime): Double {
+        require(t.year == 2022) { "${t.year}" }
+        if (t.month !in Month.MARCH..Month.OCTOBER) return 0.0
         var adjustedDay = t
         if (adjustedDay.dayOfMonth == 31) {
             adjustedDay = adjustedDay.withDayOfMonth(30)
@@ -113,4 +113,20 @@ class FroniusData : SolarProductionCalculator {
         adjustedDay = adjustedDay.withMonth(6)
         return (hourlyMap[adjustedDay] ?: 0.0) / 1000.0
     }
+}
+
+fun SolarProductionCalculator.dumpMonthlyStats() {
+    val production = (1..12).associateWith { month ->
+        var start = LocalDateTime.of(2022, month, 1, 0, 0, 0)
+        val end = start.plusMonths(1L)
+        var productionkWh = 0.0
+        while (start < end) {
+            productionkWh += apply(start)
+            start = start.plusHours(1L)
+        }
+        productionkWh
+    }
+    println("MONTHLY PRODUCTION STATS:")
+    production.map { "Month ${it.key}: ${it.value}kWh" } .forEach { println(it) }
+    println("TOTAL: ${production.values.sum()}kWh\n")
 }
