@@ -5,6 +5,7 @@ import java.time.LocalDateTime
 import java.time.Month
 import java.time.format.DateTimeFormatter
 import java.util.function.Function
+import kotlin.math.roundToInt
 
 fun main() {
     // spot prices. Maps date+time to a price per kWh in cents.
@@ -53,6 +54,9 @@ fun main() {
 
     // print stats
     fun statsSince(since: LocalDateTime) {
+        /**
+         * Returns spot price at [dateTime], in euro-cents.
+         */
         fun getSpotPriceAt(dateTime: LocalDateTime): Double =
             spotPrices[dateTime] ?: spotPrices.getOrElse(dateTime.toLocalDate().atStartOfDay()) { throw RuntimeException("No spot price for $dateTime") }
 
@@ -70,8 +74,16 @@ fun main() {
             filteredConsumption.entries.sumOf { it.value * getSpotPriceAt(it.key) * 0.01 }
         println("Electricity price at spot prices: $totalPriceAtSpot EUR")
         println("Spot price = flat price at ${totalPriceAtSpot / filteredConsumption.values.sum() * 100}c/kWh")
+        println("== Spot prices: Average cost by hour ================================================================")
+        (0..23).forEach { hour ->
+            val spotPricesAtHour = filteredConsumption.filterKeys { it.hour == hour }.keys.map { getSpotPriceAt(it) }
+            val roundedSpotPricesAtHour = spotPricesAtHour.map { it.roundToInt().toDouble() }
+            println("$hour: ${spotPricesAtHour.statistics()} ;   ${roundedSpotPricesAtHour.statistics()}")
+        }
         println("=======================================================================================")
         println("Days with non-zero consumption where spot price was higher than ${currentPriceEur * 100}c")
+        val costlyConsumption = filteredConsumption.filter { (dateTime, c) -> getSpotPriceAt(dateTime) > currentPriceEur * 100 && c > 0.0 }
+        println(costlyConsumption.map { "${it.key}: ${it.value}" } .joinToString("\n"))
     }
 
     statsSince(LocalDateTime.of(2023, 1, 1, 0, 0, 0))
@@ -132,3 +144,8 @@ fun SolarProductionCalculator.dumpMonthlyStats() {
     production.map { "Month ${it.key}: ${it.value}kWh" } .forEach { println(it) }
     println("TOTAL: ${production.values.sum()}kWh\n")
 }
+
+fun Iterable<Double>.statistics(): String =
+        "min: ${min()}, max: ${max()}, avg: ${average()}, median: ${median()}"
+fun Iterable<Double>.median(): Double? = sorted().middleItem()
+fun <T> List<T>.middleItem(): T? = get(indices.first + (indices.last - indices.first) / 2)
