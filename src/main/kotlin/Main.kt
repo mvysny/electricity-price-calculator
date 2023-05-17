@@ -8,7 +8,8 @@ import java.util.function.Function
 
 fun main() {
     // spot prices. Maps date+time to a price per kWh in cents.
-    // Downloaded from https://sahko.tk/ . The CSV has two columns.
+    // Downloaded from https://sahko.tk/ - click on the upper-right hamburger menu icon,
+    // then "download CSV". The CSV has two columns.
     // First column is the date+time in hourly granularity,
     // second column is the price of electricity in euro-cents.
     val spotPrices = mutableMapOf<LocalDateTime, Double>()
@@ -32,7 +33,7 @@ fun main() {
     File("/home/mavi/Downloads/helen.csv").bufferedReader().use {
         val csvReader = CSVReader(it)
         csvReader.readNext() // skip header
-        val datetimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss")
+        val datetimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
         val lines = generateSequence { csvReader.readNext() }
         lines.forEach { line ->
             if (line[1].isNotBlank()) { // for future dates the consumption will be missing. just skip them.
@@ -42,7 +43,7 @@ fun main() {
         }
     }
 
-    val solarPanelGenerationPerHour: SolarProductionCalculator = FroniusData() // or DummySolarProduction or NoSolarProduction
+    val solarPanelGenerationPerHour: SolarProductionCalculator = NoSolarProduction // or DummySolarProduction or NoSolarProduction
     solarPanelGenerationPerHour.dumpMonthlyStats()
     // adjust with a generation data.
     for (key in consumption.keys.toList()) {
@@ -62,17 +63,18 @@ fun main() {
         println("Max consumption kWh: ${filteredConsumption.entries.maxByOrNull { it.value }}")
         println("Avg hourly consumption kWh: ${filteredConsumption.values.average()}")
         println()
-        println("Electricity price at flat 5.18c/kWh: ${filteredConsumption.values.sum() * 0.0518} EUR")
+        val currentPriceEur = 0.0518
+        println("Electricity price at flat ${currentPriceEur * 100}c/kWh: ${filteredConsumption.values.sum() * currentPriceEur} EUR")
         println("Electricity price at flat 20c/kWh: ${filteredConsumption.values.sum() * 0.2} EUR")
         val totalPriceAtSpot =
             filteredConsumption.entries.sumOf { it.value * getSpotPriceAt(it.key) * 0.01 }
         println("Electricity price at spot prices: $totalPriceAtSpot EUR")
         println("Spot price = flat price at ${totalPriceAtSpot / filteredConsumption.values.sum() * 100}c/kWh")
+        println("=======================================================================================")
+        println("Days with non-zero consumption where spot price was higher than ${currentPriceEur * 100}c")
     }
 
-    statsSince(LocalDateTime.of(2022, 1, 1, 0, 0, 0))
-    val i_started_to_charge_my_car_at_1am = LocalDateTime.of(2022, 8, 29, 0, 0, 0)
-    statsSince(i_started_to_charge_my_car_at_1am)
+    statsSince(LocalDateTime.of(2023, 1, 1, 0, 0, 0))
 }
 
 /**
@@ -117,7 +119,7 @@ class FroniusData : SolarProductionCalculator {
 
 fun SolarProductionCalculator.dumpMonthlyStats() {
     val production = (1..12).associateWith { month ->
-        var start = LocalDateTime.of(2022, month, 1, 0, 0, 0)
+        var start = LocalDateTime.of(2023, month, 1, 0, 0, 0)
         val end = start.plusMonths(1L)
         var productionkWh = 0.0
         while (start < end) {
